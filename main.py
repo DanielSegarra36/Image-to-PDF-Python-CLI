@@ -34,16 +34,45 @@ def fetch_images(urls):
       print(f"Failed to fetch image from {url}")
   return images
 
+def biggest_dimension(images):
+  widest = 0
+  tallest = 0
+  for img in images:
+    currIMG = Image.open(f'{img}')
+    if currIMG.size[0] > widest:
+        widest = currIMG.size[0]
+    if currIMG.size[1] > tallest:
+        tallest = currIMG.size[1]
+  return widest, tallest
 
 def create_pdf(title, images):
   pdf_file = f"{title}.pdf"
-  rawIMG = Image.open(f'{images[0]}')
-  c = canvas.Canvas(pdf_file, pagesize=(rawIMG.size[0], rawIMG.size[1]))
+  width, height = biggest_dimension(images)
+  c = canvas.Canvas(pdf_file, pagesize=(width, height))
 
   for img in images:
-    # print(f'image size: {rawIMG.size}')
-    c.drawImage(img, 0, 0, width=rawIMG.size[0], height=rawIMG.size[1])
+    # black background
+    c.setFillColorRGB(0, 0, 0)
+    c.rect(0, 0, width, height, fill=True)
+    
+    # reset the x and y positions
+    xPos = 0
+    yPos = 0
+    
+    # if the image does not fit the page size, resize it
+    currIMG = Image.open(f'{img}')
+    if currIMG.size[0] > width or currIMG.size[1] > height:
+      currIMG.thumbnail((width, height))
+      currIMG.save(f'{img}', "JPEG")
+
+    # center the image on the page
+    xPos = (width - currIMG.size[0]) / 2
+    yPos = (height - currIMG.size[1]) / 2
+
+    # add the image to the PDF
+    c.drawImage(img, xPos, yPos, width=currIMG.size[0], height=currIMG.size[1])
     c.showPage()
+    
     # delete the image after it is added to the PDF
     os.remove(img)
 
@@ -68,8 +97,25 @@ def main():
     with open(urls[0], 'r') as file:
       urls = file.read().splitlines()
 
-  images = fetch_images(urls)
-  create_pdf(title, images)
+  try:
+    images = fetch_images(urls)
+    if images:
+        create_pdf(title, images)
+    else:
+        print("No valid images found to create a PDF.")
+        
+        
+  except requests.RequestException as e:
+    print(f"Failed to fetch images: {e}")
+  except Exception as e:
+    print(f"An error occurred: {e}")
+  finally:
+    # Clean up: Remove the temporary folder and its contents
+    if os.path.exists(".temp_images"):
+        for file in os.listdir(".temp_images"):
+            os.remove(os.path.join(".temp_images", file))
+        os.rmdir(".temp_images")
+
 
 
 if __name__ == "__main__":
